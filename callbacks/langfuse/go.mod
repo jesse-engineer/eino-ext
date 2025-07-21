@@ -23,7 +23,7 @@ require (
 	github.com/goph/emperror v0.17.2 // indirect
 	github.com/gopherjs/gopherjs v1.17.2 // indirect
 	github.com/invopop/yaml v0.1.0 // indirect
-	github.com/jesse-engineer/eino-ext/libs/acl/langfuse v0.0.0-20250721104416-66705db904df // indirect
+	github.com/jesse-engineer/eino-ext/libs/acl/langfuse v0.0.0-20250721121405-3ada74290552 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/jtolds/gls v4.20.0+incompatible // indirect

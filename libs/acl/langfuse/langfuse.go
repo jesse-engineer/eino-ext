@@ -17,7 +17,6 @@
 package langfuse
 
 import (
-	"fmt"
 	"net/http"
 	"time"
 
