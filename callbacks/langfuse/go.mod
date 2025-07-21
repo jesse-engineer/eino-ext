@@ -1,4 +1,4 @@
-module github.com/cloudwego/eino-ext/callbacks/langfuse
+module github.com/jesse-engineer/eino-ext/callbacks/langfuse
 
 go 1.23.0
 
