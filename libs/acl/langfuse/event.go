@@ -56,7 +56,6 @@ type EventType string
 
 const (
 	EventTypeTraceCreate      EventType = "trace-create"
-	EventTypeTraceUpdate      EventType = "trace-update"
 	EventTypeSpanCreate       EventType = "span-create"
 	EventTypeSpanUpdate       EventType = "span-update"
 	EventTypeGenerationCreate EventType = "generation-create"

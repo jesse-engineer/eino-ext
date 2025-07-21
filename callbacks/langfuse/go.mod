@@ -2,12 +2,10 @@ module github.com/cloudwego/eino-ext/callbacks/langfuse
 
 go 1.23.0
 
-
 require (
 	github.com/bytedance/mockey v1.2.13
 	github.com/bytedance/sonic v1.13.2
 	github.com/cloudwego/eino v0.3.27
-	github.com/cloudwego/eino-ext/libs/acl/langfuse v0.0.0-20250409060521-ba8646352e4b
 	github.com/golang/mock v1.6.0
 	github.com/stretchr/testify v1.10.0
 )
@@ -25,6 +23,7 @@ require (
 	github.com/goph/emperror v0.17.2 // indirect
 	github.com/gopherjs/gopherjs v1.17.2 // indirect
 	github.com/invopop/yaml v0.1.0 // indirect
+	github.com/jesse-engineer/eino-ext/libs/acl/langfuse v0.0.0-20250721104416-66705db904df // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/jtolds/gls v4.20.0+incompatible // indirect

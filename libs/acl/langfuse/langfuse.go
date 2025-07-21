@@ -17,6 +17,7 @@
 package langfuse
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
@@ -126,7 +127,7 @@ func (l *langfuseIns) CreateTrace(body *TraceEventBody) (string, error) {
 func (l *langfuseIns) EndTrace(body *TraceEventBody) error {
 	return l.tm.push(&event{
 		ID:   uuid.NewString(),
-		Type: EventTypeTraceUpdate,
+		Type: EventTypeTraceCreate,
 		Body: eventBodyUnion{Trace: body},
 	})
 }
