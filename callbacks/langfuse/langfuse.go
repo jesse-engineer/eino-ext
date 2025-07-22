@@ -308,7 +308,6 @@ func (c *CallbackHandler) OnEnd(ctx context.Context, info *callbacks.RunInfo, ou
 	if err != nil {
 		log.Printf("end span fail: %v, runinfo: %+v", err, info)
 	}
-
 	if info.Component == compose.ComponentOfGraph {
 		err = c.cli.EndTrace(&langfuse.TraceEventBody{
 			BaseEventBody: langfuse.BaseEventBody{
