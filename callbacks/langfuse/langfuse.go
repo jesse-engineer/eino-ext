@@ -27,7 +27,6 @@ import (
 	"github.com/cloudwego/eino/callbacks"
 	"github.com/cloudwego/eino/components"
 	"github.com/cloudwego/eino/components/model"
-	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
 	"github.com/jesse-engineer/eino-ext/libs/acl/langfuse"
 )
@@ -307,17 +306,6 @@ func (c *CallbackHandler) OnEnd(ctx context.Context, info *callbacks.RunInfo, ou
 	})
 	if err != nil {
 		log.Printf("end span fail: %v, runinfo: %+v", err, info)
-	}
-	if info.Component == compose.ComponentOfGraph {
-		err = c.cli.EndTrace(&langfuse.TraceEventBody{
-			BaseEventBody: langfuse.BaseEventBody{
-				ID: state.traceID,
-			},
-			Output: out,
-		})
-		if err != nil {
-			log.Printf("end trace fail: %v, runinfo: %+v", err, info)
-		}
 	}
 	return ctx
 }
@@ -600,18 +588,6 @@ func (c *CallbackHandler) OnEndWithStreamOutput(ctx context.Context, info *callb
 		})
 		if err != nil {
 			log.Printf("end stream span fail: %v, runinfo: %+v", err, info)
-		}
-
-		if info.Component == compose.ComponentOfGraph {
-			err = c.cli.EndTrace(&langfuse.TraceEventBody{
-				BaseEventBody: langfuse.BaseEventBody{
-					ID: state.traceID,
-				},
-				Output: out,
-			})
-			if err != nil {
-				log.Printf("end trace fail: %v, runinfo: %+v", err, info)
-			}
 		}
 	}()
 
