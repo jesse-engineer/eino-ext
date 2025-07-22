@@ -308,6 +308,7 @@ func (c *CallbackHandler) OnEnd(ctx context.Context, info *callbacks.RunInfo, ou
 	if err != nil {
 		log.Printf("end span fail: %v, runinfo: %+v", err, info)
 	}
+
 	if info.Component == compose.ComponentOfGraph {
 		err = c.cli.EndTrace(&langfuse.TraceEventBody{
 			BaseEventBody: langfuse.BaseEventBody{
@@ -601,9 +602,33 @@ func (c *CallbackHandler) OnEndWithStreamOutput(ctx context.Context, info *callb
 		if err != nil {
 			log.Printf("end stream span fail: %v, runinfo: %+v", err, info)
 		}
+
+		if info.Component == compose.ComponentOfGraph {
+			err = c.cli.EndTrace(&langfuse.TraceEventBody{
+				BaseEventBody: langfuse.BaseEventBody{
+					ID: state.traceID,
+				},
+				Output: out,
+			})
+			if err != nil {
+				log.Printf("end trace fail: %v, runinfo: %+v", err, info)
+			}
+		}
 	}()
 
 	return ctx
+}
+
+func (c *CallbackHandler) ReportOutput(ctx context.Context, traceID string, output string) {
+	err := c.cli.EndTrace(&langfuse.TraceEventBody{
+		BaseEventBody: langfuse.BaseEventBody{
+			ID: traceID,
+		},
+		Output: output,
+	})
+	if err != nil {
+		log.Printf("output end trace fail: %v, traceID: %s", err, traceID)
+	}
 }
 
 func (c *CallbackHandler) getOrInitState(ctx context.Context, curName string) (context.Context, *langfuseState) {
