@@ -1,4 +1,4 @@
-module github.com/cloudwego/eino-ext/libs/acl/langfuse
+module github.com/jesse-engineer/eino-ext/libs/acl/langfuse
 
 go 1.23.0
 

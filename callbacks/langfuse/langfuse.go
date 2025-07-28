@@ -24,11 +24,11 @@ import (
 	"time"
 
 	"github.com/bytedance/sonic"
-	"github.com/cloudwego/eino-ext/libs/acl/langfuse"
 	"github.com/cloudwego/eino/callbacks"
 	"github.com/cloudwego/eino/components"
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
+	"github.com/jesse-engineer/eino-ext/libs/acl/langfuse"
 )
 
 type Config struct {
@@ -592,6 +592,18 @@ func (c *CallbackHandler) OnEndWithStreamOutput(ctx context.Context, info *callb
 	}()
 
 	return ctx
+}
+
+func (c *CallbackHandler) ReportOutput(ctx context.Context, traceID string, output string) {
+	err := c.cli.EndTrace(&langfuse.TraceEventBody{
+		BaseEventBody: langfuse.BaseEventBody{
+			ID: traceID,
+		},
+		Output: output,
+	})
+	if err != nil {
+		log.Printf("output end trace fail: %v, traceID: %s", err, traceID)
+	}
 }
 
 func (c *CallbackHandler) getOrInitState(ctx context.Context, curName string) (context.Context, *langfuseState) {

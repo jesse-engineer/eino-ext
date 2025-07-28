@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/cloudwego/eino-ext/libs/acl/langfuse"
+	"github.com/jesse-engineer/eino-ext/libs/acl/langfuse"
 )
 
 type langfuseTraceOptionKey struct{}
@@ -49,6 +49,11 @@ func WithName(name string) TraceOption {
 func WithUserID(userID string) TraceOption {
 	return func(o *traceOptions) {
 		o.UserID = userID
+	}
+}
+func WithInput(input string) TraceOption {
+	return func(o *traceOptions) {
+		o.Input = input
 	}
 }
 func WithSessionID(sessionID string) TraceOption {
@@ -81,6 +86,7 @@ type traceOptions struct {
 	ID        string
 	Name      string
 	UserID    string
+	Input     string
 	SessionID string
 	Release   string
 	Tags      []string
@@ -97,6 +103,7 @@ func initState(_ context.Context, cli langfuse.Langfuse, options *traceOptions) 
 		},
 		TimeStamp: time.Now(),
 		UserID:    options.UserID,
+		Input:     options.Input,
 		SessionID: options.SessionID,
 		Release:   options.Release,
 		Tags:      options.Tags,

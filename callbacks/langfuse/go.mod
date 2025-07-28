@@ -1,14 +1,13 @@
-module github.com/cloudwego/eino-ext/callbacks/langfuse
+module github.com/jesse-engineer/eino-ext/callbacks/langfuse
 
 go 1.23.0
-
 
 require (
 	github.com/bytedance/mockey v1.2.13
 	github.com/bytedance/sonic v1.13.2
 	github.com/cloudwego/eino v0.3.27
-	github.com/cloudwego/eino-ext/libs/acl/langfuse v0.0.0-20250409060521-ba8646352e4b
 	github.com/golang/mock v1.6.0
+	github.com/jesse-engineer/eino-ext/libs/acl/langfuse v0.0.0-20250721121501-4cadd5f7957a
 	github.com/stretchr/testify v1.10.0
 )
 
@@ -16,6 +15,7 @@ require (
 	github.com/bytedance/sonic/loader v0.2.4 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cloudwego/base64x v0.1.5 // indirect
+	github.com/cloudwego/eino-ext/libs/acl/langfuse v0.0.0-20250721082501-cbc8987cacb6 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/getkin/kin-openapi v0.118.0 // indirect
@@ -45,9 +45,9 @@ require (
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/yargevad/filepathx v1.0.0 // indirect
 	golang.org/x/arch v0.12.0 // indirect
-	golang.org/x/crypto v0.39.0 // indirect
 	golang.org/x/exp v0.0.0-20230713183714-613f0c0eb8a1 // indirect
 	golang.org/x/sys v0.33.0 // indirect
+	golang.org/x/term v0.32.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
