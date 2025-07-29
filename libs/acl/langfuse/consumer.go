@@ -19,6 +19,7 @@ package langfuse
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -151,6 +152,8 @@ func (i *ingestionConsumer) next() []*event {
 		if !ok {
 			break
 		}
+		bytes, _ := json.Marshal(ev)
+		fmt.Printf("langfuse next pre event=%s\n", bytes)
 
 		// sample
 		if !i.deterministicSample(ev.Body.getTraceID()) {
@@ -202,6 +205,7 @@ func (i *ingestionConsumer) next() []*event {
 
 		totalSize += size
 		events = append(events, ev)
+		fmt.Printf("langfuse next post event=%s\n", bytes)
 		if totalSize >= maxBatchSizeBytes {
 			break
 		}
