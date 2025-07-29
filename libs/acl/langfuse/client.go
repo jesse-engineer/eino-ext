@@ -102,7 +102,7 @@ func (c *client) batchIngestion(batch []*event, metadata map[string]string) erro
 		Batch:    batch,
 		MetaData: metadata,
 	})
-	fmt.Printf("langfuse batchIngestion=%s", body)
+	fmt.Printf("langfuse batchIngestion=%s\n", body)
 	if err != nil {
 		return fmt.Errorf("failed to marshal ingestion request body: %v", err)
 	}
