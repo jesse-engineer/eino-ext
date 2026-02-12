@@ -89,6 +89,15 @@ func extractModelOutput(outs []*model.CallbackOutput) (usage *model.TokenUsage, 
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("concat message failed: %v", err)
 	}
+
+	if message.ResponseMeta != nil && message.ResponseMeta.Usage != nil {
+		usage = &model.TokenUsage{
+			PromptTokens:     message.ResponseMeta.Usage.PromptTokens,
+			CompletionTokens: message.ResponseMeta.Usage.CompletionTokens,
+			TotalTokens:      message.ResponseMeta.Usage.TotalTokens,
+		}
+	}
+
 	return usage, message, extra, nil
 }
 
