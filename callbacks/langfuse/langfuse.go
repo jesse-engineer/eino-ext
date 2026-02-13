@@ -275,11 +275,19 @@ func (c *CallbackHandler) OnEnd(ctx context.Context, info *callbacks.RunInfo, ou
 			EndTime:             time.Now(),
 			CompletionStartTime: time.Now(),
 		}
-		if mcbo.TokenUsage != nil {
-			body.Usage = &langfuse.Usage{
-				PromptTokens:     mcbo.TokenUsage.PromptTokens,
-				CompletionTokens: mcbo.TokenUsage.CompletionTokens,
-				TotalTokens:      mcbo.TokenUsage.TotalTokens,
+		if mcbo.Message.ResponseMeta != nil {
+			usage := mcbo.Message.ResponseMeta.Usage
+
+			body.Usage = &langfuse.UsageDetail{
+				CompletionTokens: usage.CompletionTokens,
+				PromptTokens:     usage.PromptTokens,
+				TotalTokens:      usage.TotalTokens,
+				CompletionTokensDetails: &langfuse.CompletionTokensDetails{
+					ReasoningTokens: usage.CompletionTokensDetails.ReasoningTokens,
+				},
+				PromptTokensDetails: &langfuse.PromptTokensDetails{
+					CachedTokens: usage.PromptTokenDetails.CachedTokens,
+				},
 			}
 		}
 
@@ -525,7 +533,7 @@ func (c *CallbackHandler) OnEndWithStreamOutput(ctx context.Context, info *callb
 				outs = append(outs, chunk)
 			}
 
-			usage, outMessage, extra, err := extractModelOutput(convModelCallbackOutput(outs))
+			outMessage, extra, err := extractModelOutput(convModelCallbackOutput(outs))
 			body := &langfuse.GenerationEventBody{
 				BaseObservationEventBody: langfuse.BaseObservationEventBody{
 					BaseEventBody: langfuse.BaseEventBody{
@@ -537,11 +545,19 @@ func (c *CallbackHandler) OnEndWithStreamOutput(ctx context.Context, info *callb
 				EndTime:             time.Now(),
 				CompletionStartTime: startTime,
 			}
-			if usage != nil {
-				body.Usage = &langfuse.Usage{
-					PromptTokens:     usage.PromptTokens,
+			if outMessage.ResponseMeta != nil && outMessage.ResponseMeta.Usage != nil {
+				usage := outMessage.ResponseMeta.Usage
+
+				body.Usage = &langfuse.UsageDetail{
 					CompletionTokens: usage.CompletionTokens,
+					PromptTokens:     usage.PromptTokens,
 					TotalTokens:      usage.TotalTokens,
+					CompletionTokensDetails: &langfuse.CompletionTokensDetails{
+						ReasoningTokens: usage.CompletionTokensDetails.ReasoningTokens,
+					},
+					PromptTokensDetails: &langfuse.PromptTokensDetails{
+						CachedTokens: usage.PromptTokenDetails.CachedTokens,
+					},
 				}
 			}
 
