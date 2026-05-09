@@ -257,7 +257,7 @@ func (c *CallbackHandler) OnEnd(ctx context.Context, info *callbacks.RunInfo, ou
 	}
 
 	state, ok := ctx.Value(langfuseStateKey{}).(*langfuseState)
-	if !ok {
+	if !ok || state == nil {
 		log.Printf("no state in context, runinfo: %+v", info)
 		return ctx
 	}
@@ -324,7 +324,7 @@ func (c *CallbackHandler) OnError(ctx context.Context, info *callbacks.RunInfo, 
 	}
 
 	state, ok := ctx.Value(langfuseStateKey{}).(*langfuseState)
-	if !ok {
+	if !ok || state == nil {
 		log.Printf("no state in context, runinfo: %+v, execute error: %v", info, err)
 		return ctx
 	}
@@ -506,7 +506,7 @@ func (c *CallbackHandler) OnEndWithStreamOutput(ctx context.Context, info *callb
 	}
 
 	state, ok := ctx.Value(langfuseStateKey{}).(*langfuseState)
-	if !ok {
+	if !ok || state == nil {
 		log.Printf("no state in context, runinfo: %+v", info)
 		return ctx
 	}
@@ -625,7 +625,11 @@ func (c *CallbackHandler) ReportOutput(ctx context.Context, traceID string, outp
 func (c *CallbackHandler) getOrInitState(ctx context.Context, curName string) (context.Context, *langfuseState) {
 	state := ctx.Value(langfuseStateKey{})
 	if state != nil {
-		return ctx, state.(*langfuseState)
+		s, _ := state.(*langfuseState)
+		if s == nil {
+			return ctx, nil
+		}
+		return ctx, s
 	}
 
 	traceOpts := ctx.Value(langfuseTraceOptionKey{})
@@ -633,6 +637,7 @@ func (c *CallbackHandler) getOrInitState(ctx context.Context, curName string) (c
 		nState, err := initState(ctx, c.cli, traceOpts.(*traceOptions))
 		if err != nil {
 			log.Printf("init state fail: %v", err)
+			return ctx, nil
 		}
 		return context.WithValue(ctx, langfuseStateKey{}, nState), nState
 	}
@@ -642,7 +647,7 @@ func (c *CallbackHandler) getOrInitState(ctx context.Context, curName string) (c
 		name = curName
 	}
 	nState, err := initState(ctx, c.cli, &traceOptions{
-		Name:      c.name,
+		Name:      name,
 		UserID:    c.userID,
 		SessionID: c.sessionID,
 		Release:   c.release,
@@ -651,6 +656,7 @@ func (c *CallbackHandler) getOrInitState(ctx context.Context, curName string) (c
 	})
 	if err != nil {
 		log.Printf("init state fail: %v", err)
+		return ctx, nil
 	}
 	return context.WithValue(ctx, langfuseStateKey{}, nState), nState
 }
