@@ -40,6 +40,11 @@ import (
 type Thinking = arkModel.Thinking
 type ThinkingType = arkModel.ThinkingType
 type ReasoningEffort = arkModel.ReasoningEffort
+
+// InputTokensStatsExtraKey is the schema.Message.Extra key used for the
+// CAAS input-token breakdown returned by the Responses API.
+const InputTokensStatsExtraKey = "input_tokens_stats"
+
 type ResponsesAPIConfig struct {
 	// Timeout specifies the timeout for the HTTP client making requests to the ResponsesAPI.
 	// If HTTPClient is set, Timeout will not be used.
@@ -1018,6 +1023,7 @@ func (cm *ResponsesAPIChatModel) toOutputMessage(resp *responses.ResponseObject,
 			Usage:        cm.toEinoTokenUsage(resp.Usage),
 		},
 	}
+	setInputTokensStats(msg, resp.Usage)
 
 	if cache != nil && cache.Enabled {
 		setResponseCacheExpireAt(msg, arkResponseCacheExpireAt(ptrFromOrZero(cache.ExpireAt)))
@@ -1283,6 +1289,7 @@ func (cm *ResponsesAPIChatModel) receivedStreamResponse(streamReader *utils.Resp
 
 func (cm *ResponsesAPIChatModel) setStreamChunkDefaultExtra(msg *schema.Message, object *responses.ResponseObject,
 	cacheConfig *cacheConfig) {
+	setInputTokensStats(msg, object.Usage)
 
 	if cacheConfig.Enabled {
 		setResponseCacheExpireAt(msg, arkResponseCacheExpireAt(ptrFromOrZero(cacheConfig.ExpireAt)))
@@ -1293,6 +1300,16 @@ func (cm *ResponsesAPIChatModel) setStreamChunkDefaultExtra(msg *schema.Message,
 		setServiceTier(msg, object.ServiceTier.String())
 	}
 
+}
+
+func setInputTokensStats(msg *schema.Message, usage *responses.Usage) {
+	if usage == nil || len(usage.InputTokensStats) == 0 {
+		return
+	}
+	if msg.Extra == nil {
+		msg.Extra = make(map[string]any, 1)
+	}
+	msg.Extra[InputTokensStatsExtraKey] = usage.InputTokensStats
 }
 
 func (cm *ResponsesAPIChatModel) sendCallbackOutput(sw *schema.StreamWriter[*model.CallbackOutput], reqConf *model.Config, modelName string,
