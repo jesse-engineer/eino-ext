@@ -954,18 +954,24 @@ func Test_responsesAPIChatModel_handleCompletedStreamEvent(t *testing.T) {
 
 }
 
-func TestResponsesAPIChatModelPreservesInputTokensStats(t *testing.T) {
+func TestResponsesAPIChatModelPreservesTokenStats(t *testing.T) {
 	cm := &ResponsesAPIChatModel{}
-	stats := map[string]any{"doubao-seed": map[string]any{"(0, 32768]": map[string]any{"input_tokens": float64(5611)}}}
+	inputStats := map[string]any{"doubao-seed": map[string]any{"(0, 32768]": map[string]any{"input_tokens": float64(5611)}}}
+	outputStats := map[string]any{"doubao-seed": map[string]any{"(0, 32768]": map[string]any{"output_tokens": float64(100)}}}
 	msg := cm.handleCompletedStreamEvent(&responses.ResponseObject{
 		Status: responses.ResponseStatus_completed,
 		Usage: &responses.Usage{
 			InputTokensDetails: &responses.InputTokensDetails{},
-			InputTokensStats:   stats,
+			InputTokensStats:   inputStats,
+			OutputTokensStats:  outputStats,
 		},
 	})
-	cm.setStreamChunkDefaultExtra(msg, &responses.ResponseObject{Usage: &responses.Usage{InputTokensStats: stats}}, &cacheConfig{})
-	assert.Equal(t, stats, msg.Extra[InputTokensStatsExtraKey])
+	cm.setStreamChunkDefaultExtra(msg, &responses.ResponseObject{Usage: &responses.Usage{
+		InputTokensStats:  inputStats,
+		OutputTokensStats: outputStats,
+	}}, &cacheConfig{})
+	assert.Equal(t, inputStats, msg.Extra[InputTokensStatsExtraKey])
+	assert.Equal(t, outputStats, msg.Extra[OutputTokensStatsExtraKey])
 }
 
 func TestResponsesAPIChatModel_populateToolChoice(t *testing.T) {
