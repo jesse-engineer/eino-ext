@@ -78,6 +78,8 @@ func main() {
 
 用户主动触发的 `context.Canceled` 会记录为 `cancelled`，可恢复的 Eino Tool、Graph、SubGraph 和 ADK interrupt 会记录为 `interrupted`，两者都不会统一标记成 `ERROR`。真正的超时和 callback 失败仍会标记为错误。
 
+ADK Agent 内的模型、工具和子 Agent 调用失败时，各自 observation 保留错误；是否让应用 root 失败，由最外层 Agent 的终止错误决定。事件或消息流中的 `adk.WillRetryError` 表示恢复过程，不会标记 Agent 失败。重试耗尽、预算或迭代限制等终止错误仍会让 Agent 和 root 显示错误，即使之前已经产生部分输出。这一行为不依赖 `CollapseAgentInternalSpans`；没有 Agent 包裹的调用仍沿用原有的 root 错误传播方式。
+
 ## Trace 精简
 
 设置 `Config.CollapseAgentInternalSpans` 可折叠 Eino Agent 下同名的内部 Chain、内部 `ReAct` Graph、`Init` Lambda，以及匿名或默认命名的 Lambda 包装层。默认关闭，以保留完整的框架 trace。Generation、Tool 和 Sub-Agent 会通过标准 OTel context 继续挂在最近的保留父节点下。

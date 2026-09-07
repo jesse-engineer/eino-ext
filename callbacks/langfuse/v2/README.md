@@ -122,6 +122,8 @@ Call `EndTrace` when the root operation completes. It records the final output a
 
 User-initiated `context.Canceled` callbacks are exported with the default Langfuse level, a `cancelled` status message, and cancellation metadata instead of being counted as errors. `context.DeadlineExceeded` and other callback failures remain errors.
 
+Inside an ADK agent, failed model, tool, and nested-agent observations retain their own errors. They do not mark the application root as failed: the outermost agent determines whether the failure is terminal. `adk.WillRetryError` events and message-stream errors are recovery notifications and do not fail the agent observation. Retry exhaustion and other terminal agent errors still fail both the agent and the root, even if partial output was produced. This behavior is independent of `CollapseAgentInternalSpans`. Calls outside an agent retain their existing root-error propagation.
+
 Resumable Eino tool, graph, subgraph, and ADK business interrupts are exported
 with the default Langfuse level and an `interrupted` status instead of `ERROR`.
 The interrupt cause remains available in structured observation output and

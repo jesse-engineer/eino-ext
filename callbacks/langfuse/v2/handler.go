@@ -45,6 +45,7 @@ const (
 
 type (
 	activeAgentNameKey struct{}
+	agentScopeKey      struct{}
 	spanStateKey       struct{}
 )
 
@@ -52,11 +53,14 @@ type spanState struct {
 	span       trace.Span
 	attributes *spanAttributeWriter
 	run        *traceRun
-	ctx        context.Context
-	inputDone  chan struct{}
-	endOnce    sync.Once
-	outcomeMu  sync.Mutex
-	failed     bool
+	// enclosingAgent owns recovery of failures from this callback. Only an
+	// outermost agent (or a call outside an agent) can fail the root trace.
+	enclosingAgent *spanState
+	ctx            context.Context
+	inputDone      chan struct{}
+	endOnce        sync.Once
+	outcomeMu      sync.Mutex
+	failed         bool
 }
 
 type asyncGroup struct {
@@ -223,15 +227,14 @@ func (c *CallbackHandler) Shutdown(ctx context.Context) error {
 }
 
 func (c *CallbackHandler) markActiveAgent(ctx context.Context, info *callbacks.RunInfo) context.Context {
-	if !c.collapseAgentInternalSpans || info.Name == "" {
-		return ctx
-	}
 	switch info.Component {
 	case adk.ComponentOfAgent, adk.ComponentOfAgenticAgent:
-		return context.WithValue(ctx, activeAgentNameKey{}, info.Name)
-	default:
-		return ctx
+		ctx = context.WithValue(ctx, agentScopeKey{}, spanStateFromContext(ctx))
+		if c.collapseAgentInternalSpans && info.Name != "" {
+			ctx = context.WithValue(ctx, activeAgentNameKey{}, info.Name)
+		}
 	}
+	return ctx
 }
 
 func (c *CallbackHandler) startSpan(ctx context.Context, info *callbacks.RunInfo) (context.Context, *spanState) {
@@ -248,13 +251,20 @@ func (c *CallbackHandler) startSpan(ctx context.Context, info *callbacks.RunInfo
 		attribute.String("langfuse.observation.metadata.eino_type", info.Type),
 	)
 	attrs, remaining := fitAttributes(attrs, c.maxSpanAttributeBytes, c.losses)
+	enclosingAgent, _ := ctx.Value(agentScopeKey{}).(*spanState)
+	if enclosingAgent != nil && enclosingAgent.run != run {
+		// StartTrace may introduce a new root inside an existing agent context.
+		// Recovery in the previous trace must not suppress this trace's errors.
+		enclosingAgent = nil
+	}
 	ctx, span := c.tracer.Start(ctx, callbackName(info), trace.WithAttributes(attrs...))
 	return ctx, &spanState{
-		span:       span,
-		attributes: newSpanAttributeWriter(span, c.prepare, remaining, c.losses),
-		run:        run,
-		ctx:        ctx,
-		inputDone:  make(chan struct{}),
+		span:           span,
+		attributes:     newSpanAttributeWriter(span, c.prepare, remaining, c.losses),
+		run:            run,
+		enclosingAgent: enclosingAgent,
+		ctx:            ctx,
+		inputDone:      make(chan struct{}),
 	}
 }
 
@@ -340,7 +350,7 @@ func (c *CallbackHandler) collectAgentMessages(state *spanState, events *adk.Asy
 			continue
 		}
 		if event.Err != nil {
-			state.recordError("agent output", event.Err)
+			state.recordAgentError("agent output", event.Err)
 		}
 		if event.Output == nil {
 			continue
@@ -348,7 +358,7 @@ func (c *CallbackHandler) collectAgentMessages(state *spanState, events *adk.Asy
 		if event.Output.MessageOutput != nil {
 			message, err := event.Output.MessageOutput.GetMessage()
 			if err != nil {
-				state.recordError("agent message", err)
+				state.recordAgentError("agent message", err)
 			} else if message != nil {
 				messages = append(messages, message)
 			}
@@ -372,7 +382,7 @@ func (c *CallbackHandler) collectAgenticMessages(state *spanState, events *adk.A
 			continue
 		}
 		if event.Err != nil {
-			state.recordError("agent output", event.Err)
+			state.recordAgentError("agent output", event.Err)
 		}
 		if event.Output == nil {
 			continue
@@ -380,7 +390,7 @@ func (c *CallbackHandler) collectAgenticMessages(state *spanState, events *adk.A
 		if event.Output.MessageOutput != nil {
 			message, err := event.Output.MessageOutput.GetMessage()
 			if err != nil {
-				state.recordError("agent message", err)
+				state.recordAgentError("agent message", err)
 			} else if message != nil {
 				messages = append(messages, message)
 			}
@@ -404,6 +414,16 @@ func (c *CallbackHandler) setAgentOutput(state *spanState, messages, customized 
 		return ""
 	}
 	return c.setJSONAttribute(state, "langfuse.observation.output", output)
+}
+
+func (s *spanState) recordAgentError(operation string, err error) {
+	var retryErr *adk.WillRetryError
+	if errors.As(err, &retryErr) {
+		// The failed attempt is recorded on the model observation. This event
+		// tells consumers to continue; exhaustion arrives as a separate error.
+		return
+	}
+	s.recordError(operation, err)
 }
 
 func (s *spanState) recordError(operation string, err error) (string, string) {
@@ -453,7 +473,7 @@ func (s *spanState) recordError(operation string, err error) (string, string) {
 	s.attributes.setString("langfuse.observation.level", "ERROR")
 	s.attributes.setString("langfuse.observation.status_message", message)
 	s.attributes.setString("langfuse.observation.metadata.eino_callback_error", message)
-	if s.run != nil {
+	if s.run != nil && s.enclosingAgent == nil {
 		s.run.recordError(message, err)
 	}
 	return "", ""
