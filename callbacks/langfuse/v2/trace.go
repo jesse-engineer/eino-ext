@@ -346,6 +346,14 @@ func (r *traceRun) recordError(message string, err error) {
 	r.attributeWriter.setString("langfuse.observation.status_message", message)
 }
 
+func (r *traceRun) recordCallbackPanic(message string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if !r.ended {
+		r.attributeWriter.setString("langfuse.observation.metadata.eino_callback_panic", message)
+	}
+}
+
 func (r *traceRun) recordCancellation(message, cause string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -397,14 +405,16 @@ func (r *traceRun) end(output string) {
 	onEnd := r.onEnd
 	r.mu.Unlock()
 
+	// Even a caller-supplied span processor may panic while ending a span.
+	// Always release registry membership and completion waiters.
+	defer close(r.done)
+	if onEnd != nil {
+		defer onEnd()
+	}
 	if output != "" {
 		r.attributeWriter.setString("langfuse.observation.output", output)
 	}
 	span.End()
-	if onEnd != nil {
-		onEnd()
-	}
-	close(r.done)
 }
 
 func (r *traceRunRegistry) add(run *traceRun) {

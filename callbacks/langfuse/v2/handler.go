@@ -87,6 +87,7 @@ type spanAttributeWriter struct {
 	prepare   func(string) string
 	remaining int
 	losses    *lossReporter
+	output    string
 }
 
 func (c *CallbackHandler) OnStart(ctx context.Context, info *callbacks.RunInfo, input callbacks.CallbackInput) context.Context {
@@ -148,6 +149,7 @@ func (c *CallbackHandler) OnError(ctx context.Context, info *callbacks.RunInfo, 
 		callbackErr = errors.New("eino callback failed without an error")
 	}
 	c.async.run(func() {
+		defer state.recoverCallbackPanic("error callback", true)
 		<-state.inputDone
 		status, cause := state.recordError("callback", callbackErr)
 		switch status {
@@ -174,6 +176,8 @@ func (c *CallbackHandler) OnStartWithStreamInput(ctx context.Context, info *call
 	ctx, state := c.startSpan(ctx, info)
 	c.async.run(func() {
 		defer close(state.inputDone)
+		// Publish input completion only after recording any collector panic.
+		defer state.recoverCallbackPanic("stream input callback", false)
 		defer closeStream(input)
 		inputs, err := receiveAll(input)
 		if err != nil {
@@ -193,6 +197,7 @@ func (c *CallbackHandler) OnEndWithStreamOutput(ctx context.Context, info *callb
 		return ctx
 	}
 	c.async.run(func() {
+		defer state.recoverCallbackPanic("stream output callback", true)
 		defer closeStream(output)
 		outputs, completionStart, err := receiveAllWithFirst(output)
 		if err != nil {
@@ -331,6 +336,7 @@ func (c *CallbackHandler) endAgentOutput(state *spanState, info *callbacks.RunIn
 			return false
 		}
 		c.async.run(func() {
+			defer state.recoverCallbackPanic("agent output callback", true)
 			<-state.inputDone
 			state.end(c.collectAgentMessages(state, converted.Events))
 		})
@@ -342,6 +348,7 @@ func (c *CallbackHandler) endAgentOutput(state *spanState, info *callbacks.RunIn
 			return false
 		}
 		c.async.run(func() {
+			defer state.recoverCallbackPanic("agentic output callback", true)
 			<-state.inputDone
 			state.end(c.collectAgenticMessages(state, converted.Events))
 		})
@@ -435,6 +442,40 @@ func (c *CallbackHandler) setAgentOutput(state *spanState, messages, customized 
 	return serialized
 }
 
+// recoverCallbackPanic runs inside the collector goroutine. Input collectors
+// leave finalization to OnEnd/OnError so a telemetry failure cannot end the span
+// before the actual result arrives. Terminal collectors always release the span.
+func (s *spanState) recoverCallbackPanic(operation string, terminal bool) {
+	if recovered := recover(); recovered != nil {
+		if terminal {
+			<-s.inputDone
+			// Cleanup must also run if recording the diagnostic itself panics.
+			defer func() { s.end(s.attributes.outputValue()) }()
+		}
+		err := recoveredPanic(operation, recovered)
+		s.recordCallbackPanic(err)
+	}
+}
+
+func (s *spanState) recordCallbackPanic(err error) {
+	message := err.Error()
+	// Callback failures are telemetry diagnostics, not an Agent terminal error.
+	if s.run != nil {
+		s.run.recordCallbackPanic(message)
+	}
+	s.outcomeMu.Lock()
+	failed := s.failed
+	s.failed = true
+	s.outcomeMu.Unlock()
+	s.span.RecordError(err, trace.WithStackTrace(true))
+	if !failed {
+		s.span.SetStatus(codes.Error, message)
+		s.attributes.setString("langfuse.observation.level", "ERROR")
+		s.attributes.setString("langfuse.observation.status_message", message)
+	}
+	s.attributes.setString("langfuse.observation.metadata.eino_callback_panic", message)
+}
+
 func (s *spanState) recordAgentError(operation string, err error) {
 	var retryErr *adk.WillRetryError
 	if errors.As(err, &retryErr) {
@@ -515,10 +556,10 @@ func (s *spanState) recordError(operation string, err error) (string, string) {
 
 func (s *spanState) end(output string) {
 	s.endOnce.Do(func() {
-		s.span.End()
 		if s.run != nil {
-			s.run.childEnded(output, s.outermostAgent)
+			defer s.run.childEnded(output, s.outermostAgent)
 		}
+		s.span.End()
 	})
 }
 
@@ -662,8 +703,17 @@ func (w *spanAttributeWriter) setString(key, value string) string {
 	}
 	if prepared != "" {
 		w.span.SetAttributes(attribute.String(key, prepared))
+		if key == "langfuse.observation.output" {
+			w.output = prepared
+		}
 	}
 	return prepared
+}
+
+func (w *spanAttributeWriter) outputValue() string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.output
 }
 
 func (w *spanAttributeWriter) setInt(key string, value int) {

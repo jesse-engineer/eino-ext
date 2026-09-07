@@ -128,6 +128,9 @@ Agent metadata retains retry notifications in `eino_retry_events` (operation, th
 
 Root output prefers a nonempty explicit `EndTrace` result, then context termination output (cancellation, interruption, or timeout), then the outermost Agent result. Nested calls cannot overwrite that Agent result, including an empty result, regardless of callback completion order. Calls without an Agent retain the last child output as a fallback.
 
+Callback-owned goroutines recover and log panics with stack traces. A terminal collector panic records `eino_callback_panic` diagnostics and ends its observation, releasing the root's child count; already recorded output is preserved. An input collector panic records the diagnostic before unblocking input completion, allowing the normal end/error callback to capture the final result and finish the span. Callback panics mark the affected observation as an internal telemetry error but do not independently fail the application root. Root metadata retains the diagnostic, and existing business failures remain errors.
+
+
 
 Resumable Eino tool, graph, subgraph, and ADK business interrupts are exported
 with the default Langfuse level and an `interrupted` status instead of `ERROR`.

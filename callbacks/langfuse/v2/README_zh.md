@@ -84,6 +84,9 @@ Agent metadata 中的 `eino_retry_events` 保留重试通知的 operation、SDK 
 
 根节点输出依次优先采用：非空的显式 `EndTrace` 结果、上下文终止结果（取消、中断或超时）、最外层 Agent 结果。无论回调结束顺序如何，嵌套调用都不能覆盖 Agent 结果，包括空结果。没有 Agent 的调用仍使用最后一个子调用输出兜底。
 
+回调自身的 goroutine 会恢复 panic 并记录堆栈。结束阶段的采集回调发生 panic 时，会记录 `eino_callback_panic` 诊断并结束 observation，释放根节点的子调用计数，同时保留已记录的输出。输入采集 panic 会先记录诊断再解除输入等待，由正常的结束或错误回调保存最终结果并收尾。回调 panic 将受影响的 observation 标记为遥测内部错误，不单独将应用根节点判为业务失败；根节点 metadata 保留诊断，已有业务错误继续保留。
+
+
 
 ## Trace 精简
 
