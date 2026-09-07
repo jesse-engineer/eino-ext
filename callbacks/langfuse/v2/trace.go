@@ -74,6 +74,9 @@ type traceRun struct {
 	autoEnd         bool
 	endRequested    bool
 	terminalOutput  string
+	explicitOutput  string
+	agentOutput     string
+	hasAgentOutput  bool
 	ended           bool
 	failed          bool
 	lastOutput      string
@@ -132,7 +135,7 @@ func (c *CallbackHandler) StartTrace(ctx context.Context, opts ...TraceOption) c
 func (c *CallbackHandler) EndTrace(ctx context.Context, output string) {
 	run, _ := ctx.Value(traceRunKey{}).(*traceRun)
 	if run != nil {
-		run.requestEnd(output)
+		run.requestEnd(output, true)
 	}
 }
 
@@ -240,13 +243,16 @@ func (r *traceRun) childStarted() bool {
 	return true
 }
 
-func (r *traceRun) childEnded(output string) {
+func (r *traceRun) childEnded(output string, outermostAgent bool) {
 	r.mu.Lock()
 	if r.ended {
 		r.mu.Unlock()
 		return
 	}
-	if output != "" {
+	if outermostAgent {
+		r.agentOutput = output
+		r.hasAgentOutput = true
+	} else if output != "" {
 		r.lastOutput = output
 	}
 	if r.active > 0 {
@@ -286,34 +292,40 @@ func (r *traceRun) contextEnded(ctx context.Context) {
 	if causeText, interrupted := interruptionCause(cause); interrupted {
 		message := "trace context: interrupted"
 		r.recordInterruption(message, causeText)
-		r.requestEnd(interruptedOutput(causeText))
+		r.requestEnd(interruptedOutput(causeText), false)
 		return
 	}
 	if errors.Is(err, context.Canceled) {
 		if errors.Is(cause, context.Canceled) {
-			r.requestEnd("")
+			r.requestEnd("", false)
 			return
 		}
 		causeText := cause.Error()
 		message := "trace context: cancelled"
 		message += ": " + causeText
 		r.recordCancellation(message, causeText)
-		r.requestEnd(cancelledOutput(causeText))
+		r.requestEnd(cancelledOutput(causeText), false)
 		return
 	}
 	message := "trace context: " + cause.Error()
 	r.recordError(message, cause)
-	r.requestEnd(errorOutput(cause.Error()))
+	r.requestEnd(errorOutput(cause.Error()), false)
 }
 
-func (r *traceRun) requestEnd(output string) {
+func (r *traceRun) requestEnd(output string, explicit bool) {
 	r.mu.Lock()
 	if r.ended {
 		r.mu.Unlock()
 		return
 	}
 	r.endRequested = true
-	r.terminalOutput = output
+	if explicit {
+		if output != "" {
+			r.explicitOutput = output
+		}
+	} else if output != "" {
+		r.terminalOutput = output
+	}
 	shouldEnd := r.active == 0
 	r.mu.Unlock()
 	if shouldEnd {
@@ -370,8 +382,14 @@ func (r *traceRun) end(output string) {
 	}
 	r.ended = true
 	if output == "" {
-		output = r.terminalOutput
-		if output == "" {
+		switch {
+		case r.explicitOutput != "":
+			output = r.explicitOutput
+		case r.terminalOutput != "":
+			output = r.terminalOutput
+		case r.hasAgentOutput:
+			output = r.agentOutput
+		default:
 			output = r.lastOutput
 		}
 	}

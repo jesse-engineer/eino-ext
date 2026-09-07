@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"reflect"
@@ -56,11 +57,21 @@ type spanState struct {
 	// enclosingAgent owns recovery of failures from this callback. Only an
 	// outermost agent (or a call outside an agent) can fail the root trace.
 	enclosingAgent *spanState
+	outermostAgent bool
 	ctx            context.Context
 	inputDone      chan struct{}
 	endOnce        sync.Once
 	outcomeMu      sync.Mutex
 	failed         bool
+	// retryEvents is owned by the agent event collector.
+	retryEvents []agentRetryEvent
+}
+
+type agentRetryEvent struct {
+	Operation    string `json:"operation"`
+	Attempt      int    `json:"attempt"`
+	Error        string `json:"error"`
+	RejectReason any    `json:"reject_reason,omitempty"`
 }
 
 type asyncGroup struct {
@@ -263,6 +274,7 @@ func (c *CallbackHandler) startSpan(ctx context.Context, info *callbacks.RunInfo
 		attributes:     newSpanAttributeWriter(span, c.prepare, remaining, c.losses),
 		run:            run,
 		enclosingAgent: enclosingAgent,
+		outermostAgent: enclosingAgent == nil && (info.Component == adk.ComponentOfAgent || info.Component == adk.ComponentOfAgenticAgent),
 		ctx:            ctx,
 		inputDone:      make(chan struct{}),
 	}
@@ -410,17 +422,39 @@ func (c *CallbackHandler) setAgentOutput(state *spanState, messages, customized 
 	if values := nonEmptySlice(customized); values != nil {
 		output["customized"] = values
 	}
-	if len(output) == 0 {
-		return ""
+	var serialized string
+	if len(output) > 0 {
+		serialized = c.setJSONAttribute(state, "langfuse.observation.output", output)
 	}
-	return c.setJSONAttribute(state, "langfuse.observation.output", output)
+	// Preserve the final output before spending any remaining attribute budget
+	// on diagnostics. The event count counts notifications, not executed retries.
+	if len(state.retryEvents) > 0 {
+		state.attributes.setInt("langfuse.observation.metadata.eino_retry_event_count", len(state.retryEvents))
+		c.setJSONAttribute(state, "langfuse.observation.metadata.eino_retry_events", state.retryEvents)
+	}
+	return serialized
 }
 
 func (s *spanState) recordAgentError(operation string, err error) {
 	var retryErr *adk.WillRetryError
 	if errors.As(err, &retryErr) {
-		// The failed attempt is recorded on the model observation. This event
-		// tells consumers to continue; exhaustion arrives as a separate error.
+		// A successful provider response can still be rejected by ShouldRetry.
+		// Keep its diagnostic even when the model observation has no error.
+		reason := retryErr.RejectReason()
+		if cause, ok := reason.(error); ok {
+			reason = cause.Error()
+		}
+		if reason != nil {
+			encoded, marshalErr := json.Marshal(reason)
+			if marshalErr != nil {
+				s.attributes.losses.Add(lossMetadataSerialization, 1)
+				reason = fmt.Sprint(reason)
+			} else {
+				reason = json.RawMessage(encoded)
+			}
+		}
+		stateEvent := agentRetryEvent{Operation: operation, Attempt: retryErr.RetryAttempt, Error: retryErr.Error(), RejectReason: reason}
+		s.retryEvents = append(s.retryEvents, stateEvent)
 		return
 	}
 	s.recordError(operation, err)
@@ -483,7 +517,7 @@ func (s *spanState) end(output string) {
 	s.endOnce.Do(func() {
 		s.span.End()
 		if s.run != nil {
-			s.run.childEnded(output)
+			s.run.childEnded(output, s.outermostAgent)
 		}
 	})
 }

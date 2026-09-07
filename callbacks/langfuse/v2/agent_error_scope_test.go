@@ -18,6 +18,7 @@ package langfuse
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sync/atomic"
@@ -152,6 +153,82 @@ func TestAgentErrorScopeADKRecovery(t *testing.T) {
 	}
 }
 
+func TestAgentRetryDiagnosticsForRejectedResponses(t *testing.T) {
+	for _, exhausted := range []bool{false, true} {
+		for _, reason := range []any{"empty content", errors.New("invalid finish reason"), map[string]any{"code": "invalid_output"}, make(chan int)} {
+			t.Run(fmt.Sprintf("exhausted=%v/reason=%T", exhausted, reason), func(t *testing.T) {
+				h, exporter := newScopeHandler(t, true)
+				ctx := h.StartTrace(context.Background(), WithName("root"))
+				m := &scopeModel{name: "provider"}
+				agent, err := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{Name: "writer", Model: m, ModelRetryConfig: &adk.ModelRetryConfig{
+					MaxRetries: 1, BackoffFunc: func(context.Context, int) time.Duration { return time.Nanosecond },
+					ShouldRetry: func(_ context.Context, r *adk.RetryContext) *adk.RetryDecision {
+						if exhausted || m.calls.Load() == 1 {
+							return &adk.RetryDecision{Retry: true, RejectReason: reason}
+						}
+						return nil
+					},
+				}})
+				if err != nil {
+					t.Fatal(err)
+				}
+				it := adk.NewRunner(ctx, adk.RunnerConfig{Agent: agent, EnableStreaming: true}).Run(ctx, []*schema.Message{schema.UserMessage("test")}, adk.WithCallbacks(h))
+				var terminal error
+				for {
+					event, ok := it.Next()
+					if !ok {
+						break
+					}
+					if event.Err != nil {
+						terminal = event.Err
+					}
+					if event.Output != nil && event.Output.MessageOutput != nil {
+						_, _ = event.Output.MessageOutput.GetMessage()
+					}
+				}
+				h.EndTrace(ctx, "")
+				flushScope(t, h)
+				if (terminal != nil) != exhausted || m.calls.Load() != 2 {
+					t.Fatalf("terminal=%v calls=%d", terminal, m.calls.Load())
+				}
+				assertScopeError(t, exporter, "writer", exhausted)
+				assertScopeError(t, exporter, "root", exhausted)
+				attrs := attributesByKey(spanByName(t, exporter.GetSpans(), "writer").Attributes)
+				var events []agentRetryEvent
+				if err := json.Unmarshal([]byte(attrs["langfuse.observation.metadata.eino_retry_events"].Value.AsString()), &events); err != nil {
+					t.Fatal(err)
+				}
+				wantCount := 1
+				if exhausted {
+					wantCount = 2
+				}
+				if len(events) != wantCount || attrs["langfuse.observation.metadata.eino_retry_event_count"].Value.AsInt64() != int64(wantCount) {
+					t.Fatalf("retry events=%+v", events)
+				}
+				wantReason := reason
+				if cause, ok := reason.(error); ok {
+					wantReason = cause.Error()
+				}
+				encodedReason, err := json.Marshal(wantReason)
+				if err != nil {
+					encodedReason, _ = json.Marshal(fmt.Sprint(wantReason))
+				}
+				for index, event := range events {
+					gotReason, _ := json.Marshal(event.RejectReason)
+					if string(gotReason) != string(encodedReason) || event.Error == "" || event.Operation != "agent message" || event.Attempt != index {
+						t.Fatalf("event=%+v reason=%s want=%s", event, gotReason, encodedReason)
+					}
+				}
+				for _, span := range exporter.GetSpans() {
+					if attributesByKey(span.Attributes)["langfuse.observation.type"].Value.AsString() == "generation" && span.Status.Code == codes.Error {
+						t.Fatal("provider succeeded; rejection belongs to the retry policy")
+					}
+				}
+			})
+		}
+	}
+}
+
 func TestAgentErrorScopeEventForms(t *testing.T) {
 	for _, typed := range []bool{false, true} {
 		for _, terminal := range []error{nil, errors.New("budget limit"), adk.ErrExceedMaxIterations} {
@@ -194,6 +271,14 @@ func TestAgentErrorScopeEventForms(t *testing.T) {
 				flushScope(t, h)
 				assertScopeError(t, exporter, "root", terminal != nil)
 				assertScopeError(t, exporter, "agent", terminal != nil)
+				attrs := attributesByKey(spanByName(t, exporter.GetSpans(), "agent").Attributes)
+				var retries []agentRetryEvent
+				if err := json.Unmarshal([]byte(attrs["langfuse.observation.metadata.eino_retry_events"].Value.AsString()), &retries); err != nil {
+					t.Fatal(err)
+				}
+				if len(retries) != 2 || retries[0].Operation != "agent output" || retries[1].Operation != "agent message" || retries[0].Attempt != 1 || retries[1].Attempt != 1 {
+					t.Fatalf("retry events=%+v", retries)
+				}
 			})
 		}
 	}

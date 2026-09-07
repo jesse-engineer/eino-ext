@@ -124,6 +124,11 @@ User-initiated `context.Canceled` callbacks are exported with the default Langfu
 
 Inside an ADK agent, failed model, tool, and nested-agent observations retain their own errors. They do not mark the application root as failed: the outermost agent determines whether the failure is terminal. `adk.WillRetryError` events and message-stream errors are recovery notifications and do not fail the agent observation. Retry exhaustion and other terminal agent errors still fail both the agent and the root, even if partial output was produced. This behavior is independent of `CollapseAgentInternalSpans`. Calls outside an agent retain their existing root-error propagation.
 
+Agent metadata retains retry notifications in `eino_retry_events` (operation, the SDK's attempt value, error, and rejection reason), including responses rejected by `ShouldRetry` after a successful provider call. `eino_retry_event_count` counts observed notifications, not completed retries; exhaustion can also emit a notification, and attempt numbering is preserved from Eino. Error-valued reasons are stored as text; structured reasons remain JSON, with a text fallback for values that cannot be serialized. These diagnostics respect attribute limits and do not change the Agent's error level.
+
+Root output prefers a nonempty explicit `EndTrace` result, then context termination output (cancellation, interruption, or timeout), then the outermost Agent result. Nested calls cannot overwrite that Agent result, including an empty result, regardless of callback completion order. Calls without an Agent retain the last child output as a fallback.
+
+
 Resumable Eino tool, graph, subgraph, and ADK business interrupts are exported
 with the default Langfuse level and an `interrupted` status instead of `ERROR`.
 The interrupt cause remains available in structured observation output and
