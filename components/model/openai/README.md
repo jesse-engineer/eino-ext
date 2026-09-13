@@ -125,6 +125,41 @@ latest assistant response ID in `Extra`; use it only when the provider stores an
 supports retrieving that response (for example with `WithResponsesStore(true)`).
 SDK retries are disabled so application or ADK retry policies control retries.
 
+### Provider-specific stream events
+
+Set `ResponsesChatModelConfig.StreamEventHandler` to inspect SSE events, including
+extension fields available through `event.RawJSON()`. The handler returns a
+`ResponsesStreamEventResult`:
+
+- `Error` terminates the stream immediately and reaches the reader unchanged,
+  preserving `errors.Is` / `errors.As` for retry and failover policies.
+- `IncompleteError` supplies an error only if the stream ends without a terminal
+  response. A terminal response or native SDK/transport error takes precedence.
+  This is useful for quota notices that can accompany otherwise successful work.
+- A zero result leaves normal event processing unchanged. A nil handler preserves
+  the default behavior.
+
+For example, an application can classify its gateway's events:
+
+```go
+StreamEventHandler: func(ctx context.Context, event responses.ResponseStreamEventUnion) openai.ResponsesStreamEventResult {
+    switch event.Type {
+    case "gateway.upstream_error":
+        return openai.ResponsesStreamEventResult{Error: errGatewayUpstream}
+    case "gateway.quota_notice":
+        return openai.ResponsesStreamEventResult{IncompleteError: errGatewayQuota}
+    }
+    return openai.ResponsesStreamEventResult{}
+},
+```
+
+Here `responses` is `github.com/openai/openai-go/v3/responses`; the error values
+are application-owned sentinels. In practice, inspect the extension payload to
+determine whether the event indicates a failure. Events are processed sequentially
+within each stream, but the same handler can run concurrently for different
+requests. Incomplete-stream errors are kept separately for each stream by the
+adapter; handlers do not need shared mutable state for this purpose.
+
 The Responses implementation uses the official OpenAI Go SDK and requires Go 1.22
 or later. See [the runnable example](examples/responses/responses.go).
 

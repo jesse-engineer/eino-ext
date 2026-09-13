@@ -82,6 +82,25 @@ type ResponsesChatModelConfig struct {
 	Store                *bool
 	PromptCacheRetention ResponsesPromptCacheRetention
 	HTTPClient           *http.Client
+	// StreamEventHandler optionally inspects stream events before standard parsing.
+	// It can translate provider extensions into immediate or incomplete-stream errors.
+	StreamEventHandler ResponsesStreamEventHandler
+}
+
+// ResponsesStreamEventHandler inspects every SSE event, including provider-specific
+// events whose additional fields are accessible through event.RawJSON(). It runs
+// synchronously for each stream and may be called concurrently by different streams.
+// Returning a zero result leaves standard event processing unchanged.
+type ResponsesStreamEventHandler func(context.Context, responses.ResponseStreamEventUnion) ResponsesStreamEventResult
+
+// ResponsesStreamEventResult controls how a stream event affects error handling.
+type ResponsesStreamEventResult struct {
+	// Error stops the stream immediately and is returned unchanged to the reader.
+	Error error
+	// IncompleteError is retained for a clean EOF without a terminal response.
+	// A terminal response or an SDK/transport error takes precedence. The latest
+	// non-nil value wins, and the retained value is isolated to this stream.
+	IncompleteError error
 }
 
 type responseAPIOptions struct {
@@ -252,9 +271,20 @@ func (m *ResponsesChatModel) Stream(ctx context.Context, in []*schema.Message, o
 		}()
 
 		builder := newStreamBuilder()
+		var incompleteErr error
 
 		for stream.Next() {
 			event := stream.Current()
+			if handler := m.config.StreamEventHandler; handler != nil {
+				result := handler(ctx_, event)
+				if result.Error != nil {
+					_ = sw.Send(nil, result.Error)
+					return
+				}
+				if result.IncompleteError != nil {
+					incompleteErr = result.IncompleteError
+				}
+			}
 			msg, found, eventErr := builder.processEvent(ctx_, event)
 			if eventErr != nil {
 				_ = sw.Send(nil, eventErr)
@@ -273,6 +303,10 @@ func (m *ResponsesChatModel) Stream(ctx context.Context, in []*schema.Message, o
 
 		if stream.Err() != nil {
 			_ = sw.Send(nil, fmt.Errorf("stream error: %w, trace_id=%s", stream.Err(), traceID))
+			return
+		}
+		if builder.finalResponse == nil && incompleteErr != nil {
+			_ = sw.Send(nil, incompleteErr)
 			return
 		}
 
