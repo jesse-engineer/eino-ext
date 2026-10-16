@@ -327,6 +327,25 @@ response, err := chatModel.Generate(ctx, messages,
 使用选项期间，不要修改传入的 map 及其嵌套值。
 共享客户端配置和 `WithLabels` 的行为保持不变。
 
+## 请求级 HTTP Header
+
+使用 `gemini.WithHTTPHeaders(...)` 传入 `http.Header`，可通过请求头传递元数据，
+无需向 JSON 请求体添加字段：
+
+```go
+response, err := chatModel.Generate(ctx, messages,
+    gemini.WithHTTPHeaders(http.Header{
+        "X-Request-Id": {"request-123"},
+    }),
+)
+```
+
+此选项同样支持 `Stream`，可与 `WithExtraBody` 同时使用。
+创建选项时会复制 Header。Google SDK 将其与客户端级 Header 合并；
+同名字段不区分大小写，以本次请求的值为准。
+SDK 管理的 `Content-Type` 和 API Key 认证等 Header 可能优先于自定义值。
+自定义 Header 是否生效取决于接收端是否支持和处理它。
+
 ## 示例
 
 查看以下示例了解更多用法：

@@ -332,6 +332,26 @@ supported by your endpoint; this option does not make arbitrary fields valid on
 Google's APIs. Keep the map and its nested values immutable while using the option.
 Shared client configuration and the behavior of `WithLabels` remain unchanged.
 
+## Per-request HTTP headers
+
+Use `gemini.WithHTTPHeaders(...)` with an `http.Header` to send request-specific
+metadata without adding fields to the JSON payload:
+
+```go
+response, err := chatModel.Generate(ctx, messages,
+    gemini.WithHTTPHeaders(http.Header{
+        "X-Request-Id": {"request-123"},
+    }),
+)
+```
+
+The option also works with `Stream` and can be combined with `WithExtraBody`.
+Headers are copied when the option is created. The Google SDK merges them with
+client-level headers, with request values overriding matching names regardless
+of case. SDK-managed headers such as `Content-Type` and API-key authentication
+may take precedence. Custom headers require support from the receiving endpoint
+to have an effect.
+
 ## Examples
 
 See the following examples for more usage:

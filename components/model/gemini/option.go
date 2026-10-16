@@ -17,6 +17,8 @@
 package gemini
 
 import (
+	"net/http"
+
 	"github.com/eino-contrib/jsonschema"
 	"google.golang.org/genai"
 
@@ -32,6 +34,7 @@ type options struct {
 	CachedContentName  string
 	Labels             map[string]string
 	ExtraBody          map[string]any
+	HTTPHeaders        http.Header
 	ResponseLogprobs   *bool
 	Logprobs           *int32
 }
@@ -98,6 +101,18 @@ func WithLabels(labels map[string]string) model.Option {
 func WithExtraBody(body map[string]any) model.Option {
 	return model.WrapImplSpecificOptFn(func(o *options) {
 		o.ExtraBody = body
+	})
+}
+
+// WithHTTPHeaders sets additional HTTP headers for this request.
+// Headers are merged with client headers by the Google SDK; request headers
+// override client headers with the same name (case-insensitively). SDK-managed
+// headers such as Content-Type and API-key authentication may take precedence.
+// The supplied headers are copied when the option is created.
+func WithHTTPHeaders(headers http.Header) model.Option {
+	headers = headers.Clone()
+	return model.WrapImplSpecificOptFn(func(o *options) {
+		o.HTTPHeaders = headers.Clone()
 	})
 }
 
