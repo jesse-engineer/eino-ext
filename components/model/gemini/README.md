@@ -313,6 +313,25 @@ msg, _ := cm.Generate(ctx, input,
 
 > Note: Labels are only supported on the **Vertex AI** backend. The Gemini API backend rejects requests that set labels (`labels parameter is not supported in Gemini API`), so only use this option with a Vertex AI client.
 
+## Additional request body fields
+
+Use `gemini.WithExtraBody(...)` to pass custom JSON fields to a compatible endpoint:
+
+```go
+response, err := chatModel.Generate(ctx, messages,
+    gemini.WithExtraBody(map[string]any{
+        "custom_request_id": "request-123",
+    }),
+)
+```
+
+This option also works with `Stream`. It forwards fields through the Google SDK's
+per-request `HTTPOptions.ExtraBody`, which merges them into the request body after
+protocol conversion. Fields can override native fields. Only send extensions
+supported by your endpoint; this option does not make arbitrary fields valid on
+Google's APIs. Keep the map and its nested values immutable while using the option.
+Shared client configuration and the behavior of `WithLabels` remain unchanged.
+
 ## Examples
 
 See the following examples for more usage:

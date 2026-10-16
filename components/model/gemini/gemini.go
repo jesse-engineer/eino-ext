@@ -607,6 +607,10 @@ func (cm *ChatModel) genInputAndConf(input []*schema.Message, opts ...model.Opti
 		m.ImageConfig = geminiOptions.ImageConfig
 	}
 
+	if geminiOptions.ExtraBody != nil {
+		m.HTTPOptions = &genai.HTTPOptions{ExtraBody: geminiOptions.ExtraBody}
+	}
+
 	if len(geminiOptions.Labels) > 0 {
 		if cm.cli.ClientConfig().Backend != genai.BackendVertexAI {
 			return "", nil, nil, nil, fmt.Errorf("labels are only supported on the Vertex AI backend")

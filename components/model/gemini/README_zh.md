@@ -309,6 +309,24 @@ msg, _ := cm.Generate(ctx, input,
 > 注意：标签仅在 **Vertex AI** 后端受支持。Gemini API 后端会拒绝设置了标签的请求（`labels parameter is not supported in Gemini API`），因此该选项只能与 Vertex AI 客户端一起使用。
 
 
+## 自定义请求体字段
+
+使用 `gemini.WithExtraBody(...)` 向兼容的服务端传递自定义 JSON 字段：
+
+```go
+response, err := chatModel.Generate(ctx, messages,
+    gemini.WithExtraBody(map[string]any{
+        "custom_request_id": "request-123",
+    }),
+)
+```
+
+此选项同样适用于 `Stream`，通过 Google SDK 的请求级
+`HTTPOptions.ExtraBody` 在协议转换后合并请求体，允许覆盖原生字段。
+请仅传递目标服务端支持的扩展字段；此选项不意味着 Google API 会接受任意字段。
+使用选项期间，不要修改传入的 map 及其嵌套值。
+共享客户端配置和 `WithLabels` 的行为保持不变。
+
 ## 示例
 
 查看以下示例了解更多用法：
