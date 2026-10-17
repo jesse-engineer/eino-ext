@@ -111,7 +111,7 @@ func TestWithHTTPHeaders(t *testing.T) {
 					}
 					opts = []model.Option{
 						gemini.WithHTTPHeaders(headers),
-						gemini.WithExtraBody(map[string]any{"gateway_flag": true}),
+						gemini.WithExtraFields(map[string]any{"gateway_flag": true}),
 					}
 					// The option must snapshot headers, including value slices.
 					headers["X-Request-Key"][0] = "mutated-after-option"

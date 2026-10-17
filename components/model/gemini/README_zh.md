@@ -311,11 +311,11 @@ msg, _ := cm.Generate(ctx, input,
 
 ## 自定义请求体字段
 
-使用 `gemini.WithExtraBody(...)` 向兼容的服务端传递自定义 JSON 字段：
+使用 `gemini.WithExtraFields(...)` 向兼容的服务端传递自定义 JSON 字段：
 
 ```go
 response, err := chatModel.Generate(ctx, messages,
-    gemini.WithExtraBody(map[string]any{
+    gemini.WithExtraFields(map[string]any{
         "custom_request_id": "request-123",
     }),
 )
@@ -340,7 +340,7 @@ response, err := chatModel.Generate(ctx, messages,
 )
 ```
 
-此选项同样支持 `Stream`，可与 `WithExtraBody` 同时使用。
+此选项同样支持 `Stream`，可与 `WithExtraFields` 同时使用。
 创建选项时会复制 Header。Google SDK 将其与客户端级 Header 合并；
 同名字段不区分大小写，以本次请求的值为准。
 SDK 管理的 `Content-Type` 和 API Key 认证等 Header 可能优先于自定义值。

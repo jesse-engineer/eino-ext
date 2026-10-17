@@ -315,11 +315,11 @@ msg, _ := cm.Generate(ctx, input,
 
 ## Additional request body fields
 
-Use `gemini.WithExtraBody(...)` to pass custom JSON fields to a compatible endpoint:
+Use `gemini.WithExtraFields(...)` to pass custom JSON fields to a compatible endpoint:
 
 ```go
 response, err := chatModel.Generate(ctx, messages,
-    gemini.WithExtraBody(map[string]any{
+    gemini.WithExtraFields(map[string]any{
         "custom_request_id": "request-123",
     }),
 )
@@ -345,7 +345,7 @@ response, err := chatModel.Generate(ctx, messages,
 )
 ```
 
-The option also works with `Stream` and can be combined with `WithExtraBody`.
+The option also works with `Stream` and can be combined with `WithExtraFields`.
 Headers are copied when the option is created. The Google SDK merges them with
 client-level headers, with request values overriding matching names regardless
 of case. SDK-managed headers such as `Content-Type` and API-key authentication

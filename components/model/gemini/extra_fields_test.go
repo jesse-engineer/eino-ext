@@ -34,7 +34,7 @@ import (
 
 // Exercise the real adapter and SDK against a local endpoint so SDK validation
 // and protocol conversion cannot silently reject or drop the custom field.
-func TestWithExtraBody(t *testing.T) {
+func TestWithExtraFields(t *testing.T) {
 	for _, backend := range []genai.Backend{genai.BackendGeminiAPI, genai.BackendVertexAI} {
 		t.Run(fmt.Sprint(backend), func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -99,7 +99,7 @@ func TestWithExtraBody(t *testing.T) {
 				if projectID != "without-option" {
 					opts = []model.Option{
 						model.WithMaxTokens(128),
-						gemini.WithExtraBody(map[string]any{
+						gemini.WithExtraFields(map[string]any{
 							"prompt_cache_key": projectID + ":creation",
 							"generationConfig": map[string]any{"candidateCount": 1},
 						}),

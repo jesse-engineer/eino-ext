@@ -33,7 +33,7 @@ type options struct {
 	ImageConfig        *genai.ImageConfig
 	CachedContentName  string
 	Labels             map[string]string
-	ExtraBody          map[string]any
+	ExtraFields        map[string]any
 	HTTPHeaders        http.Header
 	ResponseLogprobs   *bool
 	Logprobs           *int32
@@ -94,13 +94,13 @@ func WithLabels(labels map[string]string) model.Option {
 	})
 }
 
-// WithExtraBody sets additional JSON fields on this request's body.
+// WithExtraFields sets additional JSON fields on this request's body.
 // Fields are merged by the Google SDK after protocol conversion and may override
 // native fields. Use only with endpoints that support the supplied extensions.
 // The map and its nested values must not be modified while the option is in use.
-func WithExtraBody(body map[string]any) model.Option {
+func WithExtraFields(extraFields map[string]any) model.Option {
 	return model.WrapImplSpecificOptFn(func(o *options) {
-		o.ExtraBody = body
+		o.ExtraFields = extraFields
 	})
 }
 

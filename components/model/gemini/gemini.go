@@ -607,9 +607,9 @@ func (cm *ChatModel) genInputAndConf(input []*schema.Message, opts ...model.Opti
 		m.ImageConfig = geminiOptions.ImageConfig
 	}
 
-	if geminiOptions.ExtraBody != nil || geminiOptions.HTTPHeaders != nil {
+	if geminiOptions.ExtraFields != nil || geminiOptions.HTTPHeaders != nil {
 		m.HTTPOptions = &genai.HTTPOptions{
-			ExtraBody: geminiOptions.ExtraBody,
+			ExtraBody: geminiOptions.ExtraFields,
 			Headers:   geminiOptions.HTTPHeaders,
 		}
 	}
