@@ -292,6 +292,7 @@ func (cm *ChatModel) Stream(ctx context.Context, input []*schema.Message, opts .
 			}
 			sw.Close()
 		}()
+		var hasOutput, stopped bool
 		for resp, err_ := range resultIter {
 			if err_ != nil {
 				// The SDK can report a JSON error when cancellation interrupts an
@@ -303,7 +304,22 @@ func (cm *ChatModel) Stream(ctx context.Context, input []*schema.Message, opts .
 				sw.Send(nil, err_)
 				return
 			}
-			message, err_ := convResponse(resp)
+			var message *schema.Message
+			usage := resp.UsageMetadata
+			if len(resp.Candidates) == 0 && stopped && resp.PromptFeedback == nil && usage != nil &&
+				(usage.PromptTokenCount > 0 || usage.CandidatesTokenCount > 0 || usage.TotalTokenCount > 0) {
+				// Some providers send usage separately after the final candidate.
+				// Keep it in the stream so consumers and callbacks retain token usage.
+				message = &schema.Message{Role: schema.Assistant, ResponseMeta: &schema.ResponseMeta{
+					Usage: convUsageMetadata(usage),
+				}}
+			} else {
+				message, err_ = convResponse(resp)
+				if err_ == nil {
+					hasOutput = hasOutput || message.Content != "" || len(message.ToolCalls) > 0 || len(message.AssistantGenMultiContent) > 0
+					stopped = hasOutput && message.ResponseMeta != nil && message.ResponseMeta.FinishReason == "STOP"
+				}
+			}
 			if err_ != nil {
 				sw.Send(nil, err_)
 				return
@@ -1196,19 +1212,23 @@ func convResponse(resp *genai.GenerateContentResponse) (*schema.Message, error) 
 		if message.ResponseMeta == nil {
 			message.ResponseMeta = &schema.ResponseMeta{}
 		}
-		message.ResponseMeta.Usage = &schema.TokenUsage{
-			PromptTokens: int(resp.UsageMetadata.PromptTokenCount),
-			PromptTokenDetails: schema.PromptTokenDetails{
-				CachedTokens: int(resp.UsageMetadata.CachedContentTokenCount),
-			},
-			CompletionTokens: int(resp.UsageMetadata.CandidatesTokenCount) + int(resp.UsageMetadata.ThoughtsTokenCount),
-			TotalTokens:      int(resp.UsageMetadata.TotalTokenCount),
-			CompletionTokensDetails: schema.CompletionTokensDetails{
-				ReasoningTokens: int(resp.UsageMetadata.ThoughtsTokenCount),
-			},
-		}
+		message.ResponseMeta.Usage = convUsageMetadata(resp.UsageMetadata)
 	}
 	return message, nil
+}
+
+func convUsageMetadata(usage *genai.GenerateContentResponseUsageMetadata) *schema.TokenUsage {
+	return &schema.TokenUsage{
+		PromptTokens: int(usage.PromptTokenCount),
+		PromptTokenDetails: schema.PromptTokenDetails{
+			CachedTokens: int(usage.CachedContentTokenCount),
+		},
+		CompletionTokens: int(usage.CandidatesTokenCount) + int(usage.ThoughtsTokenCount),
+		TotalTokens:      int(usage.TotalTokenCount),
+		CompletionTokensDetails: schema.CompletionTokensDetails{
+			ReasoningTokens: int(usage.ThoughtsTokenCount),
+		},
+	}
 }
 
 func convCandidate(candidate *genai.Candidate) (*schema.Message, error) {
