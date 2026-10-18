@@ -17,6 +17,7 @@
 package gemini
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"errors"
@@ -293,6 +294,7 @@ func (cm *ChatModel) Stream(ctx context.Context, input []*schema.Message, opts .
 			sw.Close()
 		}()
 		var hasOutput, stopped bool
+		var signedPartIndex int
 		for resp, err_ := range resultIter {
 			if err_ != nil {
 				// The SDK can report a JSON error when cancellation interrupts an
@@ -323,6 +325,16 @@ func (cm *ChatModel) Stream(ctx context.Context, input []*schema.Message, opts .
 			if err_ != nil {
 				sw.Send(nil, err_)
 				return
+			}
+			// Keep signed parts separate during schema.ConcatMessages. In
+			// particular, an empty signature trailer must not merge into the
+			// preceding text part or another signature trailer.
+			for i := range message.AssistantGenMultiContent {
+				part := &message.AssistantGenMultiContent[i]
+				if sig, ok := GetThoughtSignatureFromExtra(part.Extra); ok && len(sig) > 0 {
+					part.StreamingMeta = &schema.MessageStreamingMeta{Index: signedPartIndex}
+					signedPartIndex++
+				}
 			}
 			closed := sw.Send(convCallbackOutput(message, cbConf), nil)
 			if closed {
@@ -900,10 +912,17 @@ func convSchemaMessage(message *schema.Message) (*genai.Content, error) {
 		if err != nil {
 			return nil, err
 		}
-		content.Parts = append(content.Parts, parts...)
+		// Signature-only trailers belong after the tool calls, not before them.
+		tailStart := len(parts)
+		for tailStart > 0 && isStandaloneThoughtSignature(parts[tailStart-1]) {
+			tailStart--
+		}
+		content.Parts = append(content.Parts, parts[:tailStart]...)
 		if err = addToolCallPart(); err != nil {
 			return nil, err
 		}
+		content.Parts = append(content.Parts, parts[tailStart:]...)
+		restoreStandaloneMessageSignature(message, content)
 		return content, nil
 	}
 	if message.Content != "" {
@@ -930,7 +949,35 @@ func convSchemaMessage(message *schema.Message) (*genai.Content, error) {
 		}
 		content.Parts = parts
 	}
+	restoreStandaloneMessageSignature(message, content)
 	return content, nil
+}
+
+// Older streamed messages kept signature-only trailers in Message.Extra, even
+// when earlier chunks had output parts. Preserve that trailer when replaying
+// persisted history, without duplicating signatures already attached to a part.
+func restoreStandaloneMessageSignature(message *schema.Message, content *genai.Content) {
+	if message.Role != schema.Assistant {
+		return
+	}
+	sig := getMessageThoughtSignature(message)
+	if len(sig) == 0 {
+		return
+	}
+	for _, part := range content.Parts {
+		if bytes.Equal(part.ThoughtSignature, sig) {
+			return
+		}
+	}
+	content.Parts = append(content.Parts, &genai.Part{ThoughtSignature: sig})
+}
+
+func isStandaloneThoughtSignature(part *genai.Part) bool {
+	return len(part.ThoughtSignature) > 0 && part.Text == "" && !part.Thought &&
+		part.FunctionCall == nil && part.FunctionResponse == nil &&
+		part.ToolCall == nil && part.ToolResponse == nil &&
+		part.InlineData == nil && part.FileData == nil &&
+		part.ExecutableCode == nil && part.CodeExecutionResult == nil
 }
 
 func convInputMedia(contents []schema.MessageInputPart) ([]*genai.Part, error) {
@@ -1275,7 +1322,7 @@ func convCandidate(candidate *genai.Candidate) (*schema.Message, error) {
 
 			if part.Thought {
 				result.ReasoningContent = part.Text
-			} else if len(part.Text) > 0 {
+			} else if len(part.Text) > 0 || isStandaloneThoughtSignature(part) {
 				texts = append(texts, part.Text)
 				contentBuilder.WriteString(part.Text)
 				outPart := schema.MessageOutputPart{
