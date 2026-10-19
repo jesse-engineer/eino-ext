@@ -34,7 +34,7 @@ import (
 
 // Exercise the real adapter and SDK against a local endpoint so SDK validation
 // and protocol conversion cannot drop the header or put it into the JSON body.
-func TestWithHTTPHeaders(t *testing.T) {
+func TestWithCustomHeaders(t *testing.T) {
 	for _, backend := range []genai.Backend{genai.BackendGeminiAPI, genai.BackendVertexAI} {
 		t.Run(fmt.Sprint(backend), func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -110,7 +110,7 @@ func TestWithHTTPHeaders(t *testing.T) {
 						"x-override":    {"request-value"},
 					}
 					opts = []model.Option{
-						gemini.WithHTTPHeaders(headers),
+						gemini.WithCustomHeaders(headers),
 						gemini.WithExtraFields(map[string]any{"gateway_flag": true}),
 					}
 					// The option must snapshot headers, including value slices.

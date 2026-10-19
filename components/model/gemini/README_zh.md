@@ -329,12 +329,12 @@ response, err := chatModel.Generate(ctx, messages,
 
 ## 请求级 HTTP Header
 
-使用 `gemini.WithHTTPHeaders(...)` 传入 `http.Header`，可通过请求头传递元数据，
+使用 `gemini.WithCustomHeaders(...)` 传入 `http.Header`，可通过请求头传递元数据，
 无需向 JSON 请求体添加字段：
 
 ```go
 response, err := chatModel.Generate(ctx, messages,
-    gemini.WithHTTPHeaders(http.Header{
+    gemini.WithCustomHeaders(http.Header{
         "X-Request-Id": {"request-123"},
     }),
 )

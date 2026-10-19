@@ -34,7 +34,7 @@ type options struct {
 	CachedContentName  string
 	Labels             map[string]string
 	ExtraFields        map[string]any
-	HTTPHeaders        http.Header
+	CustomHeaders      http.Header
 	ResponseLogprobs   *bool
 	Logprobs           *int32
 }
@@ -104,15 +104,15 @@ func WithExtraFields(extraFields map[string]any) model.Option {
 	})
 }
 
-// WithHTTPHeaders sets additional HTTP headers for this request.
+// WithCustomHeaders sets additional HTTP headers for this request.
 // Headers are merged with client headers by the Google SDK; request headers
 // override client headers with the same name (case-insensitively). SDK-managed
 // headers such as Content-Type and API-key authentication may take precedence.
 // The supplied headers are copied when the option is created.
-func WithHTTPHeaders(headers http.Header) model.Option {
+func WithCustomHeaders(headers http.Header) model.Option {
 	headers = headers.Clone()
 	return model.WrapImplSpecificOptFn(func(o *options) {
-		o.HTTPHeaders = headers.Clone()
+		o.CustomHeaders = headers.Clone()
 	})
 }
 

@@ -334,12 +334,12 @@ Shared client configuration and the behavior of `WithLabels` remain unchanged.
 
 ## Per-request HTTP headers
 
-Use `gemini.WithHTTPHeaders(...)` with an `http.Header` to send request-specific
+Use `gemini.WithCustomHeaders(...)` with an `http.Header` to send request-specific
 metadata without adding fields to the JSON payload:
 
 ```go
 response, err := chatModel.Generate(ctx, messages,
-    gemini.WithHTTPHeaders(http.Header{
+    gemini.WithCustomHeaders(http.Header{
         "X-Request-Id": {"request-123"},
     }),
 )
